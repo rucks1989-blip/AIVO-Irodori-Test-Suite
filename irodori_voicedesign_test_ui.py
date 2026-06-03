@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,7 @@ REQUEST_TIMEOUT_SECONDS = 600
 MAX_SIGNED_63BIT_INT = (1 << 63) - 1
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_EMBED_PROFILE_DIR = PROJECT_ROOT / "irodori_embed_profiles"
+REF_WAV_UPLOAD_DIR = PROJECT_ROOT / "outputs" / "ref_wav_uploads"
 
 
 def now_iso() -> str:
@@ -28,6 +31,36 @@ def list_speaker_profiles(profile_dir: Path) -> list[dict[str, str]]:
     for path in sorted(profile_dir.glob("*.speaker.safetensors")):
         profiles.append({"name": path.name.removesuffix(".speaker.safetensors"), "path": str(path)})
     return profiles
+
+
+def safe_filename_part(value: str, fallback: str = "ref_wav") -> str:
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("._-")
+    if not safe:
+        return fallback
+    return safe[:64]
+
+
+def store_uploaded_ref_wav(uploaded_file: Any) -> Path:
+    raw_bytes = uploaded_file.getvalue()
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    cached_digest = st.session_state.get("vd_ref_wav_upload_digest")
+    cached_path = st.session_state.get("vd_ref_wav_upload_path")
+    if cached_digest == digest and cached_path:
+        cached_path_obj = Path(cached_path)
+        if cached_path_obj.exists():
+            return cached_path_obj
+
+    REF_WAV_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    original_name = getattr(uploaded_file, "name", "ref_wav.wav")
+    stem = safe_filename_part(Path(original_name).stem)
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+    unique = uuid.uuid4().hex[:8]
+    saved_path = REF_WAV_UPLOAD_DIR / f"{timestamp}_{stem}_{unique}.wav"
+    saved_path.write_bytes(raw_bytes)
+    st.session_state["vd_ref_wav_upload_digest"] = digest
+    st.session_state["vd_ref_wav_upload_path"] = str(saved_path)
+    st.session_state["vd_ref_wav_upload_name"] = original_name
+    return saved_path
 
 
 def build_request_payload(form_values: dict[str, Any]) -> dict[str, Any]:
@@ -52,7 +85,7 @@ def build_request_payload(form_values: dict[str, Any]) -> dict[str, Any]:
         if ref_embed:
             payload["ref_embed"] = ref_embed
     elif form_values["speaker_mode"] == "ref_wav":
-        ref_wav = form_values["ref_wav"].strip()
+        ref_wav = (form_values.get("ref_wav_path") or form_values.get("ref_wav") or "").strip()
         if ref_wav:
             payload["ref_wav"] = ref_wav
     return payload
@@ -118,6 +151,9 @@ def init_state() -> None:
         "health_requested_at": None,
         "voice_request_count": 0,
         "health_request_count": 0,
+        "vd_ref_wav_upload_path": None,
+        "vd_ref_wav_upload_digest": None,
+        "vd_ref_wav_upload_name": None,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -178,7 +214,7 @@ def main() -> None:
     with col_left:
         use_seed = st.checkbox("use_seed", value=False, key="vd_use_seed")
         seed = st.text_input("seed", value="", key="vd_seed_text", disabled=not use_seed)
-        if st.button("speaker一覧更新", use_container_width=True):
+        if st.button("Refresh speakers", use_container_width=True):
             st.rerun()
         with st.form("voicedesign_form", clear_on_submit=False):
             top_submit_clicked = st.form_submit_button("Generate", key="vd_generate_top", type="primary", disabled=st.session_state.is_generating, use_container_width=True)
@@ -195,19 +231,40 @@ def main() -> None:
                 }[value],
                 horizontal=True,
             )
-            speaker_name = ""
-            ref_embed = ""
-            ref_wav = ""
-            if speaker_mode == "speaker_name":
-                if speaker_names:
-                    default_index = speaker_names.index("由比ヶ浜結衣") if "由比ヶ浜結衣" in speaker_names else 0
-                    speaker_name = st.selectbox("speaker_name", options=speaker_names, index=default_index)
-                else:
-                    speaker_name = st.selectbox("speaker_name", options=[""], index=0)
-            elif speaker_mode == "ref_embed":
-                ref_embed = st.text_input("ref_embed", value="")
-            elif speaker_mode == "ref_wav":
-                ref_wav = st.text_input("ref_wav", value="")
+        speaker_name = ""
+        ref_embed = ""
+        ref_wav = ""
+        ref_wav_upload_path = ""
+        if speaker_mode == "speaker_name":
+            if speaker_names:
+                default_index = speaker_names.index("由比ヶ浜結衣") if "由比ヶ浜結衣" in speaker_names else 0
+                speaker_name = st.selectbox("speaker_name", options=speaker_names, index=default_index)
+            else:
+                speaker_name = st.selectbox("speaker_name", options=[""], index=0)
+        elif speaker_mode == "ref_embed":
+            ref_embed = st.text_input("ref_embed", value="")
+        elif speaker_mode == "ref_wav":
+            ref_wav_upload = st.file_uploader(
+                "ref_wav (.wav)",
+                type=["wav"],
+                key="vd_ref_wav_upload",
+                accept_multiple_files=False,
+            )
+            if ref_wav_upload is not None:
+                try:
+                    saved_path = store_uploaded_ref_wav(ref_wav_upload)
+                    ref_wav_upload_path = str(saved_path)
+                    st.success(f"Uploaded WAV saved to: {ref_wav_upload_path}")
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Failed to store uploaded WAV: {type(exc).__name__}: {exc}")
+            ref_wav = st.text_input(
+                "ref_wav manual path fallback",
+                value="",
+                key="vd_ref_wav_manual",
+                help="Use this when no file is uploaded. The uploaded WAV takes priority if present.",
+            )
+            if ref_wav.strip():
+                st.caption(f"Manual ref_wav: {ref_wav.strip()}")
             max_seconds = st.number_input("max_seconds", min_value=1.0, value=30.0, step=1.0)
             target_chunk_seconds = st.number_input("target_chunk_seconds", min_value=1.0, value=22.0, step=1.0)
             hard_chunk_seconds = st.number_input("hard_chunk_seconds", min_value=1.0, value=26.0, step=1.0)
@@ -224,6 +281,7 @@ def main() -> None:
             "speaker_name": speaker_name,
             "ref_embed": ref_embed,
             "ref_wav": ref_wav,
+            "ref_wav_path": ref_wav_upload_path or ref_wav.strip(),
             "max_seconds": max_seconds,
             "target_chunk_seconds": target_chunk_seconds,
             "hard_chunk_seconds": hard_chunk_seconds,
