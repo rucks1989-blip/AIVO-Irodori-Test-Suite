@@ -17,7 +17,7 @@ outputs/
 *.err.log
 *.pid
 *summary.json
-?????*.txt
+test_results*.txt
 
 ffmpeg/
 **/__pycache__/
