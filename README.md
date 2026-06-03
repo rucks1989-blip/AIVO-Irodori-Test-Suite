@@ -7,7 +7,7 @@ Irodori-TTSは前の文脈で声のトーンや感情表現が変わることが
 生成音声全体の上限時間、目標チャンク、絶対上限（多少の上限に幅を持たせるけど譲れないライン）、文字数上限、チャンク結合時の無音処理設定、sanitize_symbols、……！？　？？？などを正規化のオンオフ。
 また、各々のPCスペックでどこまで分割処理をすれば時間がかからないかのテストツールにもなっています。
 
-<img width="938" height="686" alt="image" src="https://github.com/user-attachments/assets/4b907075-68b1-4053-bbda-ff44eb0cc0e9" />
+<img width="897" height="694" alt="image" src="https://github.com/user-attachments/assets/5827ba21-e7d7-422d-b253-9b45b90e8eae" />
 
 
 
