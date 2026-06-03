@@ -2,10 +2,10 @@
 
 ## 概要
 
-本リポジトリは、FastAPI + Streamlit を用いた Irodori-TTS 通常版および VoiceDesign v3 のための、軽量なローカル検証環境です。<details>
+本リポジトリは、FastAPI + Streamlit を用いた Irodori-TTS 通常版および VoiceDesign v3 のための、軽量なローカル検証環境です。
 <img width="938" height="686" alt="image" src="https://github.com/user-attachments/assets/4b907075-68b1-4053-bbda-ff44eb0cc0e9" />
 
-</details>
+
 
 
 ### 対応環境
