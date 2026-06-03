@@ -2,7 +2,11 @@
 
 ## 概要
 
-本リポジトリは、FastAPI + Streamlit を用いた Irodori-TTS 通常版および VoiceDesign v3 のための、軽量なローカル検証環境です。
+本リポジトリは、FastAPI + Streamlit を用いた Irodori-TTS 通常版および VoiceDesign v3向け長文朗読・オーディオブック検証フロントエンドツールです。
+Irodori-TTSは前の文脈で声のトーンや感情表現が変わることがあります。そのため長文を分割すると声のトーンが変わる可能性があります。その分割処理の設定をここで確認できます。
+生成音声全体の上限時間、目標チャンク、絶対上限（多少の上限に幅を持たせるけど譲れないライン）、文字数上限、チャンク結合時の無音処理設定、sanitize_symbols、……！？　？？？などを正規化のオンオフ。
+また、各々のPCスペックでどこまで分割処理をすれば時間がかからないかのテストツールにもなっています。
+
 <img width="938" height="686" alt="image" src="https://github.com/user-attachments/assets/4b907075-68b1-4053-bbda-ff44eb0cc0e9" />
 
 
